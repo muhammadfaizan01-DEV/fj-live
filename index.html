@@ -1,0 +1,1210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>FJ Live — Cricket Scorer, Overlay & Tournament Pro</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&family=Noto+Sans+Arabic:wght@600;700;800&family=Teko:wght@600;700&display=swap" rel="stylesheet">
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
+  <style>
+    :root {
+      --bg: #071018;
+      --card: #0f1c29;
+      --border: #1d3347;
+      --accent: #00c853;
+      --gold: #ffc107;
+      --red: #ef4444;
+      --blue: #3b82f6;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', 'Noto Sans Arabic', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    body.overlay-mode { background: transparent !important; overflow: hidden; width: 100vw; height: 100vh; }
+    .hidden { display: none !important; }
+    .container { max-width: 1000px; margin: 0 auto; padding: 16px; }
+
+    /* Header */
+    .topbar {
+      display: flex; justify-content: space-between; align-items: center; gap: 10px;
+      padding: 10px 16px; background: #0b1622; border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 50; flex-wrap: wrap;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 900; font-size: 1.15rem; letter-spacing: -0.3px; }
+    .fj-badge {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent), #064e26);
+      color: #fff; display: flex; align-items: center; justify-content: center;
+      font-family: 'Teko', sans-serif; font-size: 1.55rem; font-weight: 700; line-height: 1;
+      box-shadow: 0 4px 12px rgba(0, 200, 83, 0.3);
+    }
+    .nav-tabs { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .pill {
+      font-size: 0.72rem; font-weight: 700; padding: 4px 10px; border-radius: 999px;
+      background: rgba(0,200,83,0.14); color: var(--accent); border: 1px solid rgba(0,200,83,0.3);
+    }
+    .pill.offline { background: rgba(239,68,68,0.15); color: #fca5a5; border-color: rgba(239,68,68,0.4); }
+
+    /* Cards & Controls */
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px; margin-bottom: 16px; }
+    .card h2 { font-size: 1.02rem; margin-bottom: 14px; color: #e2e8f0; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    @media (max-width: 700px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+
+    label { display: block; font-size: 0.76rem; color: var(--muted); margin-bottom: 5px; font-weight: 600; }
+    input, select, textarea {
+      width: 100%; padding: 10px 12px; border-radius: 9px; border: 1px solid var(--border);
+      background: #08121c; color: #fff; font-size: 0.92rem; outline: none; font-family: inherit;
+    }
+    input[type="color"] { padding: 4px; height: 42px; cursor: pointer; }
+    input:focus, select:focus { border-color: var(--accent); }
+
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 11px 16px; border-radius: 10px; border: none; font-weight: 700;
+      font-size: 0.9rem; cursor: pointer; transition: 0.15s;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: var(--accent); color: #03150a; }
+    .btn-secondary { background: #1c2b3b; color: #fff; border: 1px solid var(--border); }
+    .btn-danger { background: var(--red); color: #fff; }
+    .btn-gold { background: var(--gold); color: #1a1200; }
+    .btn-sm { padding: 7px 11px; font-size: 0.8rem; border-radius: 8px; }
+    .btn-block { width: 100%; }
+
+    .link-box {
+      display: flex; gap: 8px; align-items: center; background: #071018;
+      padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 10px;
+    }
+    .link-box input { border: none; background: transparent; padding: 3px; font-size: 0.8rem; color: #cbd5e1; }
+
+    /* Tables */
+    table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+    th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+    th { color: var(--gold); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    /* Scorer Night UI */
+    .scorer-header {
+      background: linear-gradient(135deg, #0a2819 0%, #0e1c2b 100%);
+      border: 1px solid #1a4c32; border-radius: 16px; padding: 16px; margin-bottom: 14px;
+    }
+    .score-main { display: flex; justify-content: space-between; align-items: baseline; }
+    .score-big { font-size: 2.5rem; font-weight: 900; letter-spacing: -1px; }
+    .score-overs { font-size: 1.1rem; color: var(--gold); font-weight: 700; }
+    .players-strip { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); }
+    .player-mini { background: rgba(0,0,0,0.3); padding: 9px 11px; border-radius: 10px; font-size: 0.84rem; cursor: pointer; }
+    .player-mini.active { border-left: 3px solid var(--accent); }
+
+    .this-over {
+      display: flex; gap: 7px; align-items: center; flex-wrap: wrap;
+      margin: 12px 0; padding: 10px 12px; background: var(--card); border-radius: 12px; border: 1px solid var(--border);
+    }
+    .ball-chip {
+      min-width: 34px; height: 34px; padding: 0 8px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 0.84rem; background: #1e293b; color: #fff;
+    }
+    .ball-chip.four { background: var(--blue); }
+    .ball-chip.six { background: var(--accent); color: #03150a; }
+    .ball-chip.wicket { background: var(--red); }
+    .ball-chip.extra { background: #92400e; color: #fef3c7; border-radius: 8px; }
+
+    .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
+    .key-btn {
+      height: 68px; border-radius: 14px; border: 1px solid var(--border);
+      background: #122233; color: #fff; font-size: 1.45rem; font-weight: 800;
+      cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    }
+    .key-btn:active { transform: scale(0.95); }
+    .key-btn.boundary { background: #0f324e; border-color: #2563eb; color: #93c5fd; }
+    .key-btn.six-btn { background: #0b3b22; border-color: var(--accent); color: #6ee7b7; }
+    .key-btn.wicket-btn { background: #451218; border-color: var(--red); color: #fca5a5; font-size: 1.1rem; }
+    .key-btn.extra-btn { background: #33250c; border-color: #d97706; color: #fde68a; font-size: 1.02rem; }
+    .key-btn.undo-btn { background: #27272a; border-color: #52525b; color: #e4e4e7; font-size: 1.02rem; }
+
+    /* Modal */
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.8);
+      display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 100;
+    }
+    .modal { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 20px; width: 100%; max-width: 440px; }
+    .modal h3 { margin-bottom: 14px; font-size: 1.08rem; }
+
+    /* ================= BROADCAST OVERLAY (DESKTOP + MOBILE STREAM READY) ================= */
+    .overlay-canvas { position: relative; width: 100vw; height: 100vh; pointer-events: none; }
+    .ov-watermark {
+      position: absolute; top: 18px; left: 22px;
+      background: rgba(7, 16, 24, 0.82); border: 1px solid rgba(255,255,255,0.18);
+      padding: 5px 12px; border-radius: 9px; font-size: 12px; font-weight: 800;
+      display: flex; align-items: center; gap: 7px; color: #e2e8f0;
+    }
+    .ov-watermark-dot { background: var(--accent); color: #03150a; padding: 2px 6px; border-radius: 5px; font-weight: 900; }
+
+    .ov-sponsor-wrap {
+      position: absolute; top: 18px; right: 22px;
+      background: rgba(7, 16, 24, 0.92); border: 2px solid var(--gold);
+      border-radius: 12px; padding: 8px 14px; display: flex; align-items: center; gap: 10px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.55);
+    }
+    .ov-sponsor-tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--gold); font-weight: 800; }
+    .ov-sponsor-name { font-size: 16px; font-weight: 800; color: #fff; }
+    .ov-sponsor-logo { height: 30px; width: auto; border-radius: 4px; object-fit: contain; }
+
+    .ov-bottom-bar {
+      position: absolute; bottom: 20px; left: 24px; right: 24px; min-height: 88px;
+      border-radius: 14px; overflow: hidden;
+      display: grid; grid-template-columns: 1.35fr 1.55fr 1.4fr 1.25fr;
+      background: linear-gradient(90deg, #06131f 0%, #0b2236 55%, #071913 100%);
+      border: 2px solid rgba(255,255,255,0.16); box-shadow: 0 16px 40px rgba(0,0,0,0.65);
+    }
+    .ov-sec { padding: 9px 16px; display: flex; flex-direction: column; justify-content: center; border-right: 1px solid rgba(255,255,255,0.12); }
+    .ov-sec:last-child { border-right: none; }
+    .ov-score-block { background: linear-gradient(135deg, var(--accent) 0%, #062a18 145%); color: #fff; }
+    .ov-team-name { font-size: 15px; font-weight: 800; text-transform: uppercase; text-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+    .ov-vs { font-size: 11px; opacity: 0.9; font-weight: 700; margin-left: 6px; }
+    .ov-main-score { font-family: 'Teko', sans-serif; font-size: 44px; line-height: 0.92; font-weight: 700; text-shadow: 0 2px 6px rgba(0,0,0,0.35); }
+    .ov-overs-badge { font-size: 14px; font-weight: 800; color: var(--gold); margin-left: 8px; background: rgba(0,0,0,0.35); padding: 2px 7px; border-radius: 6px; }
+
+    .ov-bat-row { display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; margin: 2px 0; }
+    .ov-bat-row.non-striker { color: #94a3b8; }
+    .ov-bowl-top { display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; margin-bottom: 5px; }
+    .ov-balls-row { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
+    .ov-dot {
+      min-width: 24px; height: 24px; padding: 0 5px; border-radius: 50%; font-size: 11px; font-weight: 800;
+      display: inline-flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.14); color: #fff;
+    }
+    .ov-dot.four { background: #2563eb; }
+    .ov-dot.six { background: var(--accent); color: #03150a; }
+    .ov-dot.wicket { background: #ef4444; }
+    .ov-dot.extra { background: #d97706; border-radius: 6px; }
+
+    .ov-meta-block { background: rgba(0,0,0,0.3); text-align: right; }
+    .ov-tourney { font-size: 11px; font-weight: 800; color: var(--gold); text-transform: uppercase; }
+    .ov-rates { font-size: 14px; font-weight: 800; margin-top: 3px; }
+    .ov-target { font-size: 12px; font-weight: 700; color: #6ee7b7; margin-top: 2px; }
+
+    .ov-corner-box {
+      position: absolute; bottom: 18px; left: 18px; width: 390px; max-width: calc(100vw - 24px);
+      border-radius: 14px; overflow: hidden;
+      background: rgba(7, 16, 24, 0.95); border: 2px solid var(--accent);
+      box-shadow: 0 14px 36px rgba(0,0,0,0.7);
+    }
+    .ov-cb-head { background: linear-gradient(90deg, var(--accent), #062a18 145%); padding: 9px 13px; display: flex; justify-content: space-between; align-items: center; }
+    .ov-cb-body { padding: 9px 13px; }
+
+    /* Responsive Scaling for Mobile Streaming Apps (PRISM Live Studio) */
+    @media (max-width: 850px) {
+      .ov-bottom-bar { left: 10px; right: 10px; bottom: 10px; grid-template-columns: 1fr 1fr; }
+      .ov-sec { padding: 7px 10px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+      .ov-main-score { font-size: 32px; }
+      .ov-team-name, .ov-bat-row, .ov-bowl-top, .ov-rates { font-size: 12px; }
+      .ov-sponsor-wrap { top: 10px; right: 10px; padding: 6px 10px; }
+      .ov-sponsor-name { font-size: 13px; }
+      .ov-watermark { top: 10px; left: 10px; font-size: 10px; padding: 4px 8px; }
+    }
+
+    .viewer-card {
+      background: linear-gradient(160deg, #0b2618 0%, #0f1c29 100%);
+      border: 1px solid #1d4d34; border-radius: 18px; padding: 20px; margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- TOP NAVIGATION -->
+  <header id="app-topbar" class="topbar">
+    <div class="brand">
+      <div class="fj-badge">FJ</div>
+      <div>
+        <div>FJ <span style="color:var(--accent)">LIVE</span></div>
+        <div style="font-size:0.65rem; color:var(--muted); font-weight:600;">Ab score poochna nahi padega</div>
+      </div>
+    </div>
+    <div class="nav-tabs">
+      <span id="sync-badge" class="pill">Connecting...</span>
+      <button class="btn btn-secondary btn-sm" onclick="navigate('admin')">Admin</button>
+      <button class="btn btn-secondary btn-sm" onclick="navigate('table')">Points & Stats</button>
+      <button class="btn btn-primary btn-sm" onclick="navigate('scorer')">Scorer</button>
+    </div>
+  </header>
+
+  <!-- ==================== VIEW 1: ADMIN & TOURNAMENT HUB ==================== -->
+  <main id="view-admin" class="container hidden">
+    <div class="card">
+      <h2>
+        <span>🏆 Tournament & Match Setup</span>
+        <span style="font-size:0.75rem; color:var(--gold);">FJ Pro Suite</span>
+      </h2>
+      <div class="grid-3">
+        <div>
+          <label>Tournament ID</label>
+          <input id="adm-tourney-id" value="ramazan-cup-25" />
+        </div>
+        <div>
+          <label>Tournament Name</label>
+          <input id="adm-tourney" value="FJ Ramazan Night Cup" />
+        </div>
+        <div>
+          <label>Match ID (Unique)</label>
+          <input id="adm-match-id" value="match-01" />
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-top:12px;">
+        <div>
+          <label>Batting Team (1st Innings)</label>
+          <input id="adm-team-a" value="Karachi Strikers" />
+        </div>
+        <div>
+          <label>Bowling Team</label>
+          <input id="adm-team-b" value="Lahore Lions" />
+        </div>
+        <div>
+          <label>Total Overs</label>
+          <input id="adm-overs" type="number" value="8" min="1" max="50" />
+        </div>
+        <div>
+          <label>Secret Scorer PIN</label>
+          <input id="adm-pin" value="1234" />
+        </div>
+        <div>
+          <label>Opening Striker</label>
+          <input id="adm-striker" value="Bilal" />
+        </div>
+        <div>
+          <label>Opening Non-Striker</label>
+          <input id="adm-nonstriker" value="Usman" />
+        </div>
+        <div>
+          <label>Opening Bowler</label>
+          <input id="adm-bowler" value="Hamza" />
+        </div>
+        <div>
+          <label>Overlay Language</label>
+          <select id="adm-lang">
+            <option value="en">English (CRR / Target)</option>
+            <option value="ur">Urdu اردو (رن ریٹ / ہدف)</option>
+          </select>
+        </div>
+        <div>
+          <label>Overlay Design</label>
+          <select id="adm-overlay-style">
+            <option value="corner">Corner Box (Best for Mobile Stream)</option>
+            <option value="bottom">Broadcast Bottom Bar (Landscape/OBS)</option>
+          </select>
+        </div>
+        <div>
+          <label>Custom Tournament Theme Color</label>
+          <input id="adm-color" type="color" value="#00c853" />
+        </div>
+        <div>
+          <label>Watermark ("Powered by FJ Live")</label>
+          <select id="adm-watermark">
+            <option value="yes">Show (Free Plan)</option>
+            <option value="no">Hide (Paid Plan)</option>
+          </select>
+        </div>
+        <div>
+          <label>Load Existing Match in Tournament</label>
+          <select id="adm-match-list" onchange="switchMatchFromSelect()"></select>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <label>Sponsors (Har line me ek: Name | LogoURL optional)</label>
+        <textarea id="adm-sponsors" rows="2" placeholder="Al-Madina Bakers&#10;Chai Wala Cafe | https://..."></textarea>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="createOrUpdateMatch()">💾 Save / Start Match</button>
+        <button class="btn btn-gold" onclick="downloadSummaryImage()">📸 Match Summary Image (WhatsApp)</button>
+        <button class="btn btn-danger" onclick="resetMatchScore()">🔄 Reset Match</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>🔗 Live Links (1-Click Copy)</h2>
+      <label>1. Scorer Panel (Scoring Mobile me kholein)</label>
+      <div class="link-box">
+        <input id="link-scorer" readonly />
+        <button class="btn btn-secondary btn-sm" onclick="copyField('link-scorer')">Copy</button>
+        <button class="btn btn-primary btn-sm" onclick="openView('scorer')">Open</button>
+      </div>
+      <label>2. Broadcast Overlay (PRISM Live Studio Web Widget me lagayen)</label>
+      <div class="link-box">
+        <input id="link-overlay" readonly />
+        <button class="btn btn-secondary btn-sm" onclick="copyField('link-overlay')">Copy</button>
+        <button class="btn btn-primary btn-sm" onclick="openView('overlay')">Preview</button>
+      </div>
+      <label>3. Viewer Link (WhatsApp groups me share karein)</label>
+      <div class="link-box">
+        <input id="link-viewer" readonly />
+        <button class="btn btn-secondary btn-sm" onclick="copyField('link-viewer')">Copy</button>
+        <button class="btn btn-primary btn-sm" onclick="openView('viewer')">Open</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- ==================== VIEW 2: SCORER PANEL ==================== -->
+  <main id="view-scorer" class="container hidden">
+    <div id="scorer-lock" class="card hidden" style="max-width:400px; margin:40px auto; text-align:center;">
+      <h2>🔒 FJ Scorer Lock</h2>
+      <p style="color:var(--muted); font-size:0.85rem; margin-bottom:14px;">Score badalne ke liye Match PIN darj karein</p>
+      <input id="pin-input" type="password" placeholder="Enter PIN" style="text-align:center; font-size:1.2rem; margin-bottom:12px;" />
+      <button class="btn btn-primary btn-block" onclick="verifyPin()">Unlock Scorer</button>
+    </div>
+
+    <div id="scorer-ui">
+      <div class="scorer-header">
+        <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:#a7f3d0; margin-bottom:4px;">
+          <span id="sc-tourney">Tournament</span>
+          <span id="sc-innings-label">1st Innings</span>
+        </div>
+        <div class="score-main">
+          <div>
+            <div style="font-size:0.9rem; font-weight:700; color:#cbd5e1;" id="sc-batting-team">Team A</div>
+            <div class="score-big" id="sc-score">0/0</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="score-overs" id="sc-overs">0.0 / 8</div>
+            <div style="font-size:0.82rem; color:#cbd5e1;" id="sc-crr">CRR: 0.00</div>
+          </div>
+        </div>
+        <div id="sc-target-row" style="font-size:0.84rem; color:#cbd5e1; margin-top:6px;"></div>
+
+        <div class="players-strip">
+          <div class="player-mini active" onclick="openPlayerModal('batsmen')">
+            <div><strong id="sc-striker">Striker*</strong> <span id="sc-striker-score">0(0)</span></div>
+            <div style="color:var(--muted); margin-top:2px;"><span id="sc-nonstriker">Non-Striker</span> <span id="sc-nonstriker-score">0(0)</span></div>
+          </div>
+          <div class="player-mini" onclick="openPlayerModal('bowler')">
+            <div style="color:var(--gold); font-weight:700;">Bowler (Tap to edit)</div>
+            <div style="margin-top:2px;"><strong id="sc-bowler">Bowler</strong>: <span id="sc-bowler-fig">0-0 (0.0)</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="this-over" id="sc-this-over"></div>
+
+      <div class="keypad">
+        <button class="key-btn" onclick="recordBall({runs:0, extraType:'NONE'})">0 <small style="font-size:0.65rem;color:var(--muted)">DOT</small></button>
+        <button class="key-btn" onclick="recordBall({runs:1, extraType:'NONE'})">1</button>
+        <button class="key-btn" onclick="recordBall({runs:2, extraType:'NONE'})">2</button>
+        <button class="key-btn" onclick="recordBall({runs:3, extraType:'NONE'})">3</button>
+        <button class="key-btn boundary" onclick="recordBall({runs:4, extraType:'NONE'})">4 <small style="font-size:0.65rem;">FOUR</small></button>
+        <button class="key-btn six-btn" onclick="recordBall({runs:6, extraType:'NONE'})">6 <small style="font-size:0.65rem;">SIX</small></button>
+        <button class="key-btn extra-btn" onclick="openExtraModal('WD')">WIDE</button>
+        <button class="key-btn extra-btn" onclick="openExtraModal('NB')">NO BALL</button>
+        <button class="key-btn wicket-btn" onclick="openWicketModal()">WICKET</button>
+        <button class="key-btn extra-btn" onclick="openExtraModal('B')">BYE / LB</button>
+        <button class="key-btn" style="font-size:0.95rem;" onclick="swapStrikeManual()">⇄ SWAP<br><small style="font-size:0.65rem;color:var(--muted)">STRIKE</small></button>
+        <button class="key-btn undo-btn" onclick="undoBall()">↩ UNDO<br><small style="font-size:0.65rem;">LAST BALL</small></button>
+      </div>
+
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button class="btn btn-gold" style="flex:1;" onclick="switchInnings()">🔁 Start 2nd Innings</button>
+        <button class="btn btn-primary" style="flex:1;" onclick="completeMatch()">🏁 Finish & Update Points Table</button>
+        <button class="btn btn-secondary" onclick="downloadSummaryImage()">📸 Summary PNG</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- ==================== VIEW 3: BROADCAST OVERLAY ==================== -->
+  <div id="view-overlay" class="overlay-canvas hidden">
+    <div id="ov-watermark" class="ov-watermark">
+      <span class="ov-watermark-dot">FJ</span> Powered by FJ Live
+    </div>
+
+    <div id="ov-sponsor-wrap" class="ov-sponsor-wrap hidden">
+      <img id="ov-sponsor-img" class="ov-sponsor-logo hidden" src="" alt="" />
+      <div>
+        <div class="ov-sponsor-tag" id="ov-sponsor-label">Sponsored By</div>
+        <div id="ov-sponsor-name" class="ov-sponsor-name">Sponsor</div>
+      </div>
+    </div>
+
+    <!-- Bottom Bar -->
+    <div id="ov-design-bottom" class="ov-bottom-bar">
+      <div class="ov-sec ov-score-block">
+        <div><span class="ov-team-name" id="ov-bat-team">TEAM A</span><span class="ov-vs" id="ov-bowl-team">vs TEAM B</span></div>
+        <div style="display:flex; align-items:baseline;">
+          <span class="ov-main-score" id="ov-score">0/0</span>
+          <span class="ov-overs-badge" id="ov-overs">0.0 (8)</span>
+        </div>
+      </div>
+      <div class="ov-sec">
+        <div class="ov-bat-row"><span><span style="color:var(--gold)">▶ </span><span id="ov-s1-name">Striker</span></span><span id="ov-s1-stat">0 (0)</span></div>
+        <div class="ov-bat-row non-striker"><span id="ov-s2-name">Non-Striker</span><span id="ov-s2-stat">0 (0)</span></div>
+      </div>
+      <div class="ov-sec">
+        <div class="ov-bowl-top"><span id="ov-bowler-name">Bowler</span><span id="ov-bowler-stat" style="color:var(--gold);">0-0 (0.0)</span></div>
+        <div class="ov-balls-row" id="ov-balls"></div>
+      </div>
+      <div class="ov-sec ov-meta-block">
+        <div class="ov-tourney" id="ov-tourney">TOURNAMENT</div>
+        <div class="ov-rates" id="ov-rates">CRR: 0.00</div>
+        <div class="ov-target" id="ov-target">1st Innings</div>
+      </div>
+    </div>
+
+    <!-- Corner Box -->
+    <div id="ov-design-corner" class="ov-corner-box hidden">
+      <div class="ov-cb-head">
+        <div>
+          <div style="font-size:12px; font-weight:800;" id="cb-team">TEAM A</div>
+          <div style="font-size:11px; opacity:0.9;" id="cb-tourney">TOURNAMENT</div>
+        </div>
+        <div style="text-align:right;">
+          <span style="font-family:'Teko',sans-serif; font-size:38px; line-height:0.9; font-weight:700;" id="cb-score">0/0</span>
+          <span style="font-size:13px; font-weight:800; color:var(--gold); margin-left:6px;" id="cb-overs">0.0/8</span>
+        </div>
+      </div>
+      <div class="ov-cb-body">
+        <div class="ov-bat-row" style="font-size:14px;"><span>▶ <span id="cb-s1">Striker</span></span><span id="cb-s1-stat">0(0)</span></div>
+        <div class="ov-bat-row non-striker" style="font-size:13px;"><span id="cb-s2">Non-Striker</span><span id="cb-s2-stat">0(0)</span></div>
+        <div style="border-top:1px solid rgba(255,255,255,0.1); margin:6px 0; padding-top:6px; display:flex; justify-content:space-between; font-size:12px;">
+          <span id="cb-bowler">Bowler: 0-0</span>
+          <span style="color:#6ee7b7; font-weight:700;" id="cb-meta">CRR: 0.00</span>
+        </div>
+        <div class="ov-balls-row" id="cb-balls"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== VIEW 4: VIEWER PAGE ==================== -->
+  <main id="view-viewer" class="container hidden">
+    <div class="viewer-card">
+      <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:#6ee7b7; font-weight:700;">
+        <span id="vw-tourney">TOURNAMENT</span><span>● FJ LIVE</span>
+      </div>
+      <h1 style="font-size:1.15rem; margin:6px 0;" id="vw-match-title">Team A vs Team B</h1>
+      <div style="display:flex; align-items:baseline; gap:12px; margin:10px 0;">
+        <span style="font-size:2.6rem; font-weight:900;" id="vw-score">0/0</span>
+        <span style="font-size:1.15rem; color:var(--gold); font-weight:700;" id="vw-overs">0.0 / 8</span>
+      </div>
+      <div id="vw-meta" style="font-size:0.9rem; color:#cbd5e1;">CRR: 0.00</div>
+    </div>
+
+    <div class="card">
+      <h2>🏏 Live Scorecard</h2>
+      <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border);"><strong id="vw-s1">Striker*</strong><span id="vw-s1-stat">0 (0)</span></div>
+      <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border); color:var(--muted);"><span id="vw-s2">Non-Striker</span><span id="vw-s2-stat">0 (0)</span></div>
+      <div style="display:flex; justify-content:space-between; padding:8px 0; color:var(--gold); font-weight:600;"><span id="vw-bowler">Bowler</span><span id="vw-bowler-stat">0-0 (0.0)</span></div>
+      <div class="this-over" id="vw-balls" style="margin-top:12px;"></div>
+    </div>
+
+    <div id="vw-sponsor-card" class="card hidden" style="text-align:center;">
+      <div style="font-size:0.75rem; color:var(--gold); font-weight:700; text-transform:uppercase;">Match Sponsors</div>
+      <div id="vw-sponsor-text" style="font-size:1.05rem; font-weight:800; margin-top:4px;"></div>
+    </div>
+
+    <div class="grid-2">
+      <button class="btn btn-primary" onclick="shareWhatsApp()">📲 Share on WhatsApp</button>
+      <button class="btn btn-gold" onclick="downloadSummaryImage()">📸 Download Match Summary</button>
+    </div>
+  </main>
+
+  <!-- ==================== VIEW 5: POINTS TABLE & PLAYER STATS ==================== -->
+  <main id="view-table" class="container hidden">
+    <div class="card">
+      <h2>📊 Tournament Points Table & NRR</h2>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Team</th><th>M</th><th>W</th><th>L</th><th>T</th><th>Pts</th><th>NRR</th></tr></thead>
+          <tbody id="points-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h2>🏏 Top Run Scorers</h2>
+        <table>
+          <thead><tr><th>Player</th><th>Runs</th><th>Balls</th><th>4s/6s</th></tr></thead>
+          <tbody id="top-bat-tbody"></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h2>🎯 Best Bowlers</h2>
+        <table>
+          <thead><tr><th>Bowler</th><th>Wkts</th><th>Runs</th><th>Overs</th></tr></thead>
+          <tbody id="top-bowl-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <canvas id="summary-canvas" width="1080" height="1080" class="hidden"></canvas>
+  <div id="modal-backdrop" class="modal-backdrop hidden" onclick="if(event.target===this) closeModal()">
+    <div class="modal" id="modal-content"></div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // 1. FJ LIVE FIREBASE CONFIG (CONNECTED)
+    // =========================================================================
+    const FIREBASE_CONFIG = {
+      apiKey: "AIzaSyAFD7WpPzarGPuwAK1qnUMLEv1XaNpRCME",
+      authDomain: "fj-live-b752f.firebaseapp.com",
+      databaseURL: "https://fj-live-b752f-default-rtdb.firebaseio.com",
+      projectId: "fj-live-b752f",
+      storageBucket: "fj-live-b752f.firebasestorage.app",
+      messagingSenderId: "281311642304",
+      appId: "1:281311642304:web:2db116510735d02f67e325",
+      measurementId: "G-QK48DVJ669"
+    };
+
+    firebase.initializeApp(FIREBASE_CONFIG);
+    const db = firebase.database();
+
+    const bc = ('BroadcastChannel' in window) ? new BroadcastChannel('fj_live_sync') : null;
+    const params = new URLSearchParams(window.location.search);
+    let currentView = params.get('view') || 'admin';
+    let currentTourneyId = params.get('tourney') || 'ramazan-cup-25';
+    let currentMatchId = params.get('match') || 'match-01';
+    let pinUnlocked = false;
+    let sponsorIndex = 0;
+
+    let tourneyDoc = {
+      name: 'FJ Ramazan Night Cup',
+      accentColor: '#00c853',
+      matches: { 'match-01': defaultMatch('match-01') }
+    };
+
+    function defaultMatch(id) {
+      return {
+        id,
+        teamA: 'Karachi Strikers',
+        teamB: 'Lahore Lions',
+        overs: 8,
+        pin: '1234',
+        lang: 'en',
+        overlayStyle: 'corner',
+        showWatermark: 'yes',
+        sponsors: [{ name: 'Al-Madina Bakers', logo: '' }],
+        innings: 1,
+        target: null,
+        completed: false,
+        winner: null,
+        striker: 'Bilal',
+        nonStriker: 'Usman',
+        bowler: 'Hamza',
+        balls: []
+      };
+    }
+
+    function getMatch() {
+      if (!tourneyDoc.matches) tourneyDoc.matches = {};
+      if (!tourneyDoc.matches[currentMatchId]) tourneyDoc.matches[currentMatchId] = defaultMatch(currentMatchId);
+      return tourneyDoc.matches[currentMatchId];
+    }
+
+    // =========================================================================
+    // 2. CRICKET ENGINE & STATS
+    // =========================================================================
+    function computeMatchStats(m, forceInnings = null) {
+      const inn = forceInnings || m.innings || 1;
+      const innBalls = (m.balls || []).filter(b => b.innings === inn);
+      let runs = 0, wickets = 0, legalBalls = 0, extras = 0;
+      const batsmen = {}, bowlers = {};
+
+      const ensureBat = (n) => batsmen[n] || (batsmen[n] = { name: n, runs: 0, balls: 0, fours: 0, sixes: 0 });
+      const ensureBowl = (n) => bowlers[n] || (bowlers[n] = { name: n, balls: 0, runs: 0, wickets: 0 });
+
+      innBalls.forEach(b => {
+        const bat = ensureBat(b.striker);
+        const bowl = ensureBowl(b.bowler);
+        if (b.extraType === 'NONE') {
+          runs += b.runs; legalBalls++; bat.runs += b.runs; bat.balls++;
+          if (b.runs === 4) bat.fours++; if (b.runs === 6) bat.sixes++;
+          bowl.runs += b.runs; bowl.balls++;
+        } else if (b.extraType === 'WD') {
+          const w = 1 + b.runs; runs += w; extras += w; bowl.runs += w;
+        } else if (b.extraType === 'NB') {
+          runs += 1 + b.runs; extras += 1; bat.runs += b.runs; bat.balls++;
+          if (b.runs === 4) bat.fours++; if (b.runs === 6) bat.sixes++;
+          bowl.runs += 1 + b.runs;
+        } else if (b.extraType === 'B' || b.extraType === 'LB') {
+          runs += b.runs; extras += b.runs; legalBalls++; bat.balls++; bowl.balls++;
+        }
+        if (b.isWicket) {
+          wickets++;
+          if (b.wicketType !== 'Run Out') bowl.wickets++;
+        }
+      });
+
+      const oversStr = `${Math.floor(legalBalls / 6)}.${legalBalls % 6}`;
+      const crr = legalBalls > 0 ? ((runs / legalBalls) * 6).toFixed(2) : '0.00';
+      const maxBalls = (m.overs || 8) * 6;
+      const remBalls = Math.max(0, maxBalls - legalBalls);
+      let rrr = null, runsNeeded = null;
+      if (inn === 2 && m.target) {
+        runsNeeded = Math.max(0, m.target - runs);
+        rrr = remBalls > 0 ? ((runsNeeded / remBalls) * 6).toFixed(2) : '0.00';
+      }
+
+      const s1 = ensureBat(m.striker), s2 = ensureBat(m.nonStriker), bw = ensureBowl(m.bowler);
+      return {
+        inn, battingTeam: inn === 1 ? m.teamA : m.teamB, bowlingTeam: inn === 1 ? m.teamB : m.teamA,
+        runs, wickets, legalBalls, oversStr, extras, crr,
+        target: m.target, runsNeeded, remBalls, rrr, s1, s2, bw,
+        bwOvers: `${Math.floor(bw.balls / 6)}.${bw.balls % 6}`,
+        last6: innBalls.slice(-6).map(formatBallChip), batsmen, bowlers
+      };
+    }
+
+    function formatBallChip(b) {
+      let label = String(b.runs), cls = '';
+      if (b.isWicket) { label = b.extraType === 'NONE' ? 'W' : `${b.extraType}+W`; cls = 'wicket'; }
+      else if (b.extraType === 'WD') { label = b.runs > 0 ? `WD+${b.runs}` : 'WD'; cls = 'extra'; }
+      else if (b.extraType === 'NB') { label = b.runs > 0 ? `NB+${b.runs}` : 'NB'; cls = 'extra'; }
+      else if (b.extraType === 'B' || b.extraType === 'LB') { label = `${b.extraType}${b.runs}`; cls = 'extra'; }
+      else if (b.runs === 4) cls = 'four';
+      else if (b.runs === 6) cls = 'six';
+      return { label, cls };
+    }
+
+    function computePointsAndLeaders() {
+      const teams = {}, allBats = {}, allBowls = {};
+      const initTeam = (t) => teams[t] || (teams[t] = { name: t, m: 0, w: 0, l: 0, t: 0, pts: 0, rf: 0, of: 0, ra: 0, oa: 0 });
+
+      Object.values(tourneyDoc.matches || {}).forEach(m => {
+        const i1 = computeMatchStats(m, 1);
+        const i2 = computeMatchStats(m, 2);
+
+        [i1.batsmen, i2.batsmen].forEach(map => Object.values(map).forEach(p => {
+          const cur = allBats[p.name] || (allBats[p.name] = { name: p.name, runs: 0, balls: 0, fours: 0, sixes: 0 });
+          cur.runs += p.runs; cur.balls += p.balls; cur.fours += p.fours; cur.sixes += p.sixes;
+        }));
+        [i1.bowlers, i2.bowlers].forEach(map => Object.values(map).forEach(b => {
+          const cur = allBowls[b.name] || (allBowls[b.name] = { name: b.name, wickets: 0, runs: 0, balls: 0 });
+          cur.wickets += b.wickets; cur.runs += b.runs; cur.balls += b.balls;
+        }));
+
+        if (!m.completed) return;
+        const tA = initTeam(m.teamA), tB = initTeam(m.teamB);
+        tA.m++; tB.m++;
+        const ov1 = i1.wickets >= 10 ? m.overs : (i1.legalBalls / 6);
+        const ov2 = i2.wickets >= 10 ? m.overs : (i2.legalBalls / 6);
+        tA.rf += i1.runs; tA.of += ov1; tA.ra += i2.runs; tA.oa += ov2;
+        tB.rf += i2.runs; tB.of += ov2; tB.ra += i1.runs; tB.oa += ov1;
+
+        if (i1.runs > i2.runs) { tA.w++; tA.pts += 2; tB.l++; }
+        else if (i2.runs > i1.runs) { tB.w++; tB.pts += 2; tA.l++; }
+        else { tA.t++; tB.t++; tA.pts += 1; tB.pts += 1; }
+      });
+
+      const table = Object.values(teams).map(t => {
+        const forRate = t.of > 0 ? t.rf / t.of : 0;
+        const agRate = t.oa > 0 ? t.ra / t.oa : 0;
+        return { ...t, nrr: (forRate - agRate).toFixed(3) };
+      }).sort((a, b) => b.pts - a.pts || Number(b.nrr) - Number(a.nrr));
+
+      const topBats = Object.values(allBats).sort((a, b) => b.runs - a.runs).slice(0, 8);
+      const topBowls = Object.values(allBowls).sort((a, b) => b.wickets - a.wickets || a.runs - b.runs).slice(0, 8);
+      return { table, topBats, topBowls };
+    }
+
+    // =========================================================================
+    // 3. SCORER CONTROLS
+    // =========================================================================
+    function recordBall({ runs = 0, extraType = 'NONE', isWicket = false, wicketType = 'Caught', newBatsman = '' }) {
+      const m = getMatch();
+      const prevState = { striker: m.striker, nonStriker: m.nonStriker, bowler: m.bowler, innings: m.innings };
+      const isLegal = (extraType === 'NONE' || extraType === 'B' || extraType === 'LB');
+      const before = computeMatchStats(m);
+
+      m.balls = m.balls || [];
+      m.balls.push({
+        id: Date.now(), innings: m.innings, runs: Number(runs), extraType,
+        isWicket, wicketType, striker: m.striker, nonStriker: m.nonStriker, bowler: m.bowler, prevState
+      });
+
+      if (isWicket && newBatsman.trim()) m.striker = newBatsman.trim();
+      if (runs % 2 === 1) [m.striker, m.nonStriker] = [m.nonStriker, m.striker];
+
+      const newLegal = before.legalBalls + (isLegal ? 1 : 0);
+      if (isLegal && newLegal > 0 && newLegal % 6 === 0) {
+        [m.striker, m.nonStriker] = [m.nonStriker, m.striker];
+        saveAndSync();
+        setTimeout(() => openPlayerModal('bowler', 'Over Complete! Agla Bowler select karein:'), 120);
+        return;
+      }
+      saveAndSync();
+    }
+
+    function undoBall() {
+      const m = getMatch();
+      if (!m.balls || m.balls.length === 0) return alert('Undo ke liye koi ball nahi hai.');
+      const last = m.balls.pop();
+      if (last.prevState) {
+        m.striker = last.prevState.striker;
+        m.nonStriker = last.prevState.nonStriker;
+        m.bowler = last.prevState.bowler;
+        m.innings = last.prevState.innings;
+      }
+      saveAndSync();
+    }
+
+    function swapStrikeManual() {
+      const m = getMatch();
+      [m.striker, m.nonStriker] = [m.nonStriker, m.striker];
+      saveAndSync();
+    }
+
+    function switchInnings() {
+      const m = getMatch();
+      const st = computeMatchStats(m);
+      if (m.innings === 1) {
+        if (!confirm(`1st Innings: ${st.runs}/${st.wickets}. 2nd Innings (Target ${st.runs + 1}) start karein?`)) return;
+        m.target = st.runs + 1; m.innings = 2; saveAndSync();
+        openPlayerModal('all', '2nd Innings ke Openers & Bowler darj karein:');
+      } else {
+        if (confirm('Wapas 1st Innings par jana hai?')) { m.innings = 1; saveAndSync(); }
+      }
+    }
+
+    function completeMatch() {
+      const m = getMatch();
+      const i1 = computeMatchStats(m, 1);
+      const i2 = computeMatchStats(m, 2);
+      let winner = 'Match Tied';
+      if (i1.runs > i2.runs) winner = `${m.teamA} won by ${i1.runs - i2.runs} runs`;
+      else if (i2.runs > i1.runs) winner = `${m.teamB} won by ${Math.max(1, 10 - i2.wickets)} wickets`;
+      if (!confirm(`Result: ${winner}\nKya match finish karke Points Table update karein?`)) return;
+      m.completed = true; m.winner = winner; saveAndSync();
+      alert('Points Table & Leaderboard update ho gaya!');
+    }
+
+    // =========================================================================
+    // 4. FIREBASE CLOUD SYNC & OFFLINE QUEUE
+    // =========================================================================
+    function saveAndSync() {
+      localStorage.setItem('fj_tourney_' + currentTourneyId, JSON.stringify(tourneyDoc));
+      if (bc) bc.postMessage({ tourneyId: currentTourneyId, doc: tourneyDoc });
+      if (navigator.onLine) {
+        db.ref('tournaments/' + currentTourneyId).set(tourneyDoc).catch(() => {
+          localStorage.setItem('fj_queue_' + currentTourneyId, JSON.stringify(tourneyDoc));
+        });
+      } else {
+        localStorage.setItem('fj_queue_' + currentTourneyId, JSON.stringify(tourneyDoc));
+      }
+      renderAll();
+    }
+
+    window.addEventListener('online', () => {
+      const q = localStorage.getItem('fj_queue_' + currentTourneyId);
+      if (q) {
+        db.ref('tournaments/' + currentTourneyId).set(JSON.parse(q)).then(() => localStorage.removeItem('fj_queue_' + currentTourneyId));
+      }
+      updateSyncBadge(true);
+    });
+    window.addEventListener('offline', () => updateSyncBadge(false));
+
+    function updateSyncBadge(connected = navigator.onLine) {
+      const b = document.getElementById('sync-badge');
+      if (!b) return;
+      if (!navigator.onLine) { b.textContent = 'Offline Queue'; b.classList.add('offline'); }
+      else if (connected) { b.textContent = '● FJ Live Cloud'; b.classList.remove('offline'); }
+    }
+
+    function initSync() {
+      const cached = localStorage.getItem('fj_tourney_' + currentTourneyId);
+      if (cached) tourneyDoc = JSON.parse(cached);
+      if (bc) bc.onmessage = (e) => { if (e.data && e.data.tourneyId === currentTourneyId) { tourneyDoc = e.data.doc; renderAll(); } };
+      db.ref('tournaments/' + currentTourneyId).on('value', (s) => {
+        if (s.val()) {
+          tourneyDoc = s.val();
+          localStorage.setItem('fj_tourney_' + currentTourneyId, JSON.stringify(tourneyDoc));
+          renderAll();
+        }
+        updateSyncBadge(true);
+      });
+      renderAll();
+    }
+
+    // =========================================================================
+    // 5. RENDERING
+    // =========================================================================
+    const I18N = {
+      en: { crr: 'CRR', rrr: 'RRR', need: 'Need', off: 'off', balls: 'balls', inn1: '1st Innings', sp: 'Sponsored By', vs: 'vs' },
+      ur: { crr: 'رن ریٹ', rrr: 'مطلوبہ ریٹ', need: 'مزید', off: 'رنز', balls: 'گیندیں', inn1: 'پہلی اننگز', sp: 'تعاون', vs: 'بمقابلہ' }
+    };
+
+    function renderAll() {
+      updateSyncBadge();
+      const m = getMatch();
+      const st = computeMatchStats(m);
+      if (tourneyDoc.accentColor) document.documentElement.style.setProperty('--accent', tourneyDoc.accentColor);
+
+      document.body.classList.toggle('overlay-mode', currentView === 'overlay');
+      document.getElementById('app-topbar').classList.toggle('hidden', currentView === 'overlay');
+      ['admin', 'scorer', 'overlay', 'viewer', 'table'].forEach(v => {
+        document.getElementById('view-' + v).classList.toggle('hidden', currentView !== v);
+      });
+
+      if (currentView === 'admin') renderAdmin(m);
+      if (currentView === 'scorer') renderScorer(m, st);
+      if (currentView === 'overlay') renderOverlay(m, st);
+      if (currentView === 'viewer') renderViewer(m, st);
+      if (currentView === 'table') renderTable();
+    }
+
+    function renderAdmin(m) {
+      document.getElementById('adm-tourney-id').value = currentTourneyId;
+      document.getElementById('adm-tourney').value = tourneyDoc.name || 'FJ Ramazan Night Cup';
+      document.getElementById('adm-match-id').value = currentMatchId;
+      document.getElementById('adm-team-a').value = m.teamA;
+      document.getElementById('adm-team-b').value = m.teamB;
+      document.getElementById('adm-overs').value = m.overs;
+      document.getElementById('adm-pin').value = m.pin || '';
+      document.getElementById('adm-striker').value = m.striker;
+      document.getElementById('adm-nonstriker').value = m.nonStriker;
+      document.getElementById('adm-bowler').value = m.bowler;
+      document.getElementById('adm-lang').value = m.lang || 'en';
+      document.getElementById('adm-overlay-style').value = m.overlayStyle || 'corner';
+      document.getElementById('adm-color').value = tourneyDoc.accentColor || '#00c853';
+      document.getElementById('adm-watermark').value = m.showWatermark || 'yes';
+      document.getElementById('adm-sponsors').value = (m.sponsors || []).map(s => s.logo ? `${s.name} | ${s.logo}` : s.name).join('\n');
+
+      const sel = document.getElementById('adm-match-list');
+      sel.innerHTML = Object.values(tourneyDoc.matches || {}).map(x =>
+        `<option value="${x.id}" ${x.id === currentMatchId ? 'selected' : ''}>${x.id}: ${x.teamA} vs ${x.teamB}</option>`
+      ).join('');
+
+      const base = window.location.href.split('?')[0];
+      const q = `tourney=${currentTourneyId}&match=${currentMatchId}`;
+      document.getElementById('link-scorer').value = `${base}?view=scorer&${q}`;
+      document.getElementById('link-overlay').value = `${base}?view=overlay&${q}`;
+      document.getElementById('link-viewer').value = `${base}?view=viewer&${q}`;
+    }
+
+    function renderScorer(m, st) {
+      const needPin = Boolean(m.pin) && !pinUnlocked;
+      document.getElementById('scorer-lock').classList.toggle('hidden', !needPin);
+      document.getElementById('scorer-ui').classList.toggle('hidden', needPin);
+
+      document.getElementById('sc-tourney').textContent = tourneyDoc.name;
+      document.getElementById('sc-innings-label').textContent = `${st.inn === 1 ? '1st' : '2nd'} Innings`;
+      document.getElementById('sc-batting-team').textContent = `${st.battingTeam} vs ${st.bowlingTeam}`;
+      document.getElementById('sc-score').textContent = `${st.runs}/${st.wickets}`;
+      document.getElementById('sc-overs').textContent = `${st.oversStr} / ${m.overs}`;
+      document.getElementById('sc-crr').textContent = `CRR: ${st.crr}`;
+      document.getElementById('sc-target-row').innerHTML = st.target
+        ? `🎯 Target: <strong>${st.target}</strong> • Need <strong>${st.runsNeeded}</strong> off <strong>${st.remBalls}</strong> balls (RRR: ${st.rrr})`
+        : `Extras: ${st.extras}`;
+
+      document.getElementById('sc-striker').textContent = st.s1.name + '*';
+      document.getElementById('sc-striker-score').textContent = `${st.s1.runs}(${st.s1.balls})`;
+      document.getElementById('sc-nonstriker').textContent = st.s2.name;
+      document.getElementById('sc-nonstriker-score').textContent = `${st.s2.runs}(${st.s2.balls})`;
+      document.getElementById('sc-bowler').textContent = st.bw.name;
+      document.getElementById('sc-bowler-fig').textContent = `${st.bw.wickets}-${st.bw.runs} (${st.bwOvers})`;
+      document.getElementById('sc-this-over').innerHTML = '<span style="font-size:0.75rem;color:var(--muted);font-weight:700;">LAST BALLS:</span>' +
+        st.last6.map(b => `<span class="ball-chip ${b.cls}">${b.label}</span>`).join('');
+    }
+
+    function renderOverlay(m, st) {
+      const t = I18N[m.lang || 'en'];
+      document.getElementById('ov-watermark').classList.toggle('hidden', m.showWatermark === 'no');
+      document.getElementById('ov-sponsor-label').textContent = t.sp;
+
+      const isCorner = (m.overlayStyle || 'corner') === 'corner';
+      document.getElementById('ov-design-bottom').classList.toggle('hidden', isCorner);
+      document.getElementById('ov-design-corner').classList.toggle('hidden', !isCorner);
+
+      document.getElementById('ov-bat-team').textContent = st.battingTeam;
+      document.getElementById('ov-bowl-team').textContent = `${t.vs} ${st.bowlingTeam}`;
+      document.getElementById('ov-score').textContent = `${st.runs}/${st.wickets}`;
+      document.getElementById('ov-overs').textContent = `${st.oversStr} (${m.overs})`;
+      document.getElementById('ov-s1-name').textContent = st.s1.name;
+      document.getElementById('ov-s1-stat').textContent = `${st.s1.runs} (${st.s1.balls})`;
+      document.getElementById('ov-s2-name').textContent = st.s2.name;
+      document.getElementById('ov-s2-stat').textContent = `${st.s2.runs} (${st.s2.balls})`;
+      document.getElementById('ov-bowler-name').textContent = st.bw.name;
+      document.getElementById('ov-bowler-stat').textContent = `${st.bw.wickets}-${st.bw.runs} (${st.bwOvers})`;
+      document.getElementById('ov-tourney').textContent = tourneyDoc.name;
+      document.getElementById('ov-rates').textContent = st.target ? `${t.crr}: ${st.crr} | ${t.rrr}: ${st.rrr}` : `${t.crr}: ${st.crr}`;
+      document.getElementById('ov-target').textContent = st.target
+        ? (m.lang === 'ur' ? `${t.need} ${st.runsNeeded} ${t.off} (${st.remBalls} ${t.balls})` : `Need ${st.runsNeeded} off ${st.remBalls} balls`)
+        : t.inn1;
+
+      const ballsHtml = st.last6.map(b => `<span class="ov-dot ${b.cls}">${b.label}</span>`).join('');
+      document.getElementById('ov-balls').innerHTML = ballsHtml;
+
+      document.getElementById('cb-team').textContent = `${st.battingTeam} ${t.vs} ${st.bowlingTeam}`;
+      document.getElementById('cb-tourney').textContent = tourneyDoc.name;
+      document.getElementById('cb-score').textContent = `${st.runs}/${st.wickets}`;
+      document.getElementById('cb-overs').textContent = `${st.oversStr}/${m.overs}`;
+      document.getElementById('cb-s1').textContent = st.s1.name;
+      document.getElementById('cb-s1-stat').textContent = `${st.s1.runs}(${st.s1.balls})`;
+      document.getElementById('cb-s2').textContent = st.s2.name;
+      document.getElementById('cb-s2-stat').textContent = `${st.s2.runs}(${st.s2.balls})`;
+      document.getElementById('cb-bowler').textContent = `${st.bw.name}: ${st.bw.wickets}-${st.bw.runs} (${st.bwOvers})`;
+      document.getElementById('cb-meta').textContent = st.target ? `${st.runsNeeded} (${st.remBalls}b)` : `${t.crr}: ${st.crr}`;
+      document.getElementById('cb-balls').innerHTML = ballsHtml;
+
+      updateSponsorBanner(m.sponsors || []);
+    }
+
+    function updateSponsorBanner(sponsors) {
+      const wrap = document.getElementById('ov-sponsor-wrap');
+      if (!sponsors || sponsors.length === 0) { wrap.classList.add('hidden'); return; }
+      wrap.classList.remove('hidden');
+      const sp = sponsors[sponsorIndex % sponsors.length];
+      document.getElementById('ov-sponsor-name').textContent = sp.name;
+      const img = document.getElementById('ov-sponsor-img');
+      if (sp.logo) { img.src = sp.logo; img.classList.remove('hidden'); } else img.classList.add('hidden');
+    }
+
+    setInterval(() => {
+      sponsorIndex++;
+      if (currentView === 'overlay') updateSponsorBanner(getMatch().sponsors || []);
+    }, 6000);
+
+    function renderViewer(m, st) {
+      document.getElementById('vw-tourney').textContent = tourneyDoc.name;
+      document.getElementById('vw-match-title').textContent = `${st.battingTeam} vs ${st.bowlingTeam}`;
+      document.getElementById('vw-score').textContent = `${st.runs}/${st.wickets}`;
+      document.getElementById('vw-overs').textContent = `${st.oversStr} / ${m.overs} Overs`;
+      document.getElementById('vw-meta').textContent = m.winner ? `🏆 ${m.winner}` : (st.target
+        ? `Target: ${st.target} • Need ${st.runsNeeded} off ${st.remBalls} balls (RRR: ${st.rrr})`
+        : `CRR: ${st.crr} • Extras: ${st.extras}`);
+
+      document.getElementById('vw-s1').textContent = st.s1.name + '*';
+      document.getElementById('vw-s1-stat').textContent = `${st.s1.runs} (${st.s1.balls})`;
+      document.getElementById('vw-s2').textContent = st.s2.name;
+      document.getElementById('vw-s2-stat').textContent = `${st.s2.runs} (${st.s2.balls})`;
+      document.getElementById('vw-bowler').textContent = st.bw.name;
+      document.getElementById('vw-bowler-stat').textContent = `${st.bw.wickets}-${st.bw.runs} (${st.bwOvers})`;
+      document.getElementById('vw-balls').innerHTML = st.last6.map(b => `<span class="ball-chip ${b.cls}">${b.label}</span>`).join('');
+
+      const spCard = document.getElementById('vw-sponsor-card');
+      if (m.sponsors && m.sponsors.length > 0) {
+        spCard.classList.remove('hidden');
+        document.getElementById('vw-sponsor-text').textContent = m.sponsors.map(s => s.name).join(' • ');
+      } else spCard.classList.add('hidden');
+    }
+
+    function renderTable() {
+      const { table, topBats, topBowls } = computePointsAndLeaders();
+      document.getElementById('points-tbody').innerHTML = table.length
+        ? table.map(t => `<tr><td><strong>${t.name}</strong></td><td>${t.m}</td><td>${t.w}</td><td>${t.l}</td><td>${t.t}</td><td><strong style="color:var(--accent)">${t.pts}</strong></td><td>${t.nrr}</td></tr>`).join('')
+        : '<tr><td colspan="7" style="color:var(--muted)">Koi completed match nahi hai. Scorer me "Finish Match" dabayen.</td></tr>';
+
+      document.getElementById('top-bat-tbody').innerHTML = topBats.map(p =>
+        `<tr><td><strong>${p.name}</strong></td><td style="color:var(--accent)"><strong>${p.runs}</strong></td><td>${p.balls}</td><td>${p.fours}/${p.sixes}</td></tr>`
+      ).join('');
+      document.getElementById('top-bowl-tbody').innerHTML = topBowls.map(b =>
+        `<tr><td><strong>${b.name}</strong></td><td style="color:var(--gold)"><strong>${b.wickets}</strong></td><td>${b.runs}</td><td>${Math.floor(b.balls/6)}.${b.balls%6}</td></tr>`
+      ).join('');
+    }
+
+    // =========================================================================
+    // 6. WHATSAPP MATCH SUMMARY PNG GENERATOR
+    // =========================================================================
+    function downloadSummaryImage() {
+      const m = getMatch();
+      const i1 = computeMatchStats(m, 1);
+      const i2 = computeMatchStats(m, 2);
+      const canvas = document.getElementById('summary-canvas');
+      const ctx = canvas.getContext('2d');
+
+      const grad = ctx.createLinearGradient(0, 0, 1080, 1080);
+      grad.addColorStop(0, '#07141f'); grad.addColorStop(1, '#092b1b');
+      ctx.fillStyle = grad; ctx.fillRect(0, 0, 1080, 1080);
+
+      ctx.fillStyle = tourneyDoc.accentColor || '#00c853';
+      ctx.fillRect(0, 0, 1080, 135);
+      ctx.fillStyle = '#03150a';
+      ctx.font = '900 44px Inter, sans-serif'; ctx.fillText('FJ LIVE • MATCH SUMMARY', 60, 72);
+      ctx.font = '700 26px Inter, sans-serif'; ctx.fillText(tourneyDoc.name.toUpperCase(), 60, 112);
+
+      const drawTeamCard = (y, name, score, ov) => {
+        ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fillRect(60, y, 960, 150);
+        ctx.fillStyle = '#f8fafc'; ctx.font = '800 38px Inter, sans-serif'; ctx.fillText(name, 95, y + 65);
+        ctx.fillStyle = '#94a3b8'; ctx.font = '600 26px Inter, sans-serif'; ctx.fillText(`Overs: ${ov} / ${m.overs}`, 95, y + 112);
+        ctx.fillStyle = '#ffc107'; ctx.font = '900 72px Inter, sans-serif'; ctx.textAlign = 'right';
+        ctx.fillText(score, 985, y + 98); ctx.textAlign = 'left';
+      };
+
+      drawTeamCard(190, m.teamA, `${i1.runs}/${i1.wickets}`, i1.oversStr);
+      drawTeamCard(370, m.teamB, `${i2.runs}/${i2.wickets}`, i2.oversStr);
+
+      ctx.fillStyle = '#ffc107'; ctx.fillRect(60, 555, 960, 78);
+      ctx.fillStyle = '#111'; ctx.font = '900 32px Inter, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText((m.winner || 'MATCH IN PROGRESS').toUpperCase(), 540, 606); ctx.textAlign = 'left';
+
+      const bats = Object.values({ ...i1.batsmen, ...i2.batsmen }).sort((a, b) => b.runs - a.runs);
+      const bowls = Object.values({ ...i1.bowlers, ...i2.bowlers }).sort((a, b) => b.wickets - a.wickets || a.runs - b.runs);
+      const topBat = bats[0] ? `${bats[0].name} — ${bats[0].runs} (${bats[0].balls}b)` : 'N/A';
+      const topBowl = bowls[0] ? `${bowls[0].name} — ${bowls[0].wickets}/${bowls[0].runs}` : 'N/A';
+
+      ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(60, 670, 960, 210);
+      ctx.fillStyle = '#6ee7b7'; ctx.font = '800 24px Inter, sans-serif'; ctx.fillText('STAR PERFORMERS', 95, 720);
+      ctx.fillStyle = '#ffffff'; ctx.font = '700 34px Inter, sans-serif';
+      ctx.fillText(`🏏 Best Batsman: ${topBat}`, 95, 782);
+      ctx.fillText(`🎯 Best Bowler:  ${topBowl}`, 95, 840);
+
+      const spText = (m.sponsors || []).map(s => s.name).join('  •  ');
+      if (spText) {
+        ctx.fillStyle = '#ffc107'; ctx.font = '700 24px Inter, sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(`SPONSORED BY: ${spText}`, 540, 955);
+      }
+      ctx.fillStyle = '#94a3b8'; ctx.font = '700 22px Inter, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('Powered by FJ Live  |  Ab score poochna nahi padega', 540, 1025);
+      ctx.textAlign = 'left';
+
+      const link = document.createElement('a');
+      link.download = `FJ-${m.id}-Summary.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+
+    // =========================================================================
+    // 7. HELPERS & MODALS
+    // =========================================================================
+    function createOrUpdateMatch() {
+      currentTourneyId = document.getElementById('adm-tourney-id').value.trim() || 'ramazan-cup-25';
+      currentMatchId = document.getElementById('adm-match-id').value.trim() || 'match-01';
+      tourneyDoc.name = document.getElementById('adm-tourney').value.trim();
+      tourneyDoc.accentColor = document.getElementById('adm-color').value;
+
+      const m = getMatch();
+      m.id = currentMatchId;
+      m.teamA = document.getElementById('adm-team-a').value.trim();
+      m.teamB = document.getElementById('adm-team-b').value.trim();
+      m.overs = Number(document.getElementById('adm-overs').value) || 8;
+      m.pin = document.getElementById('adm-pin').value.trim();
+      m.striker = document.getElementById('adm-striker').value.trim() || 'Striker';
+      m.nonStriker = document.getElementById('adm-nonstriker').value.trim() || 'Non-Striker';
+      m.bowler = document.getElementById('adm-bowler').value.trim() || 'Bowler';
+      m.lang = document.getElementById('adm-lang').value;
+      m.overlayStyle = document.getElementById('adm-overlay-style').value;
+      m.showWatermark = document.getElementById('adm-watermark').value;
+      m.sponsors = document.getElementById('adm-sponsors').value.split('\n').map(l => l.trim()).filter(Boolean).map(line => {
+        const [name, logo] = line.split('|').map(x => x.trim());
+        return { name, logo: logo || '' };
+      });
+
+      saveAndSync();
+      alert('FJ Match Saved & Synced to Cloud!');
+    }
+
+    function switchMatchFromSelect() {
+      currentMatchId = document.getElementById('adm-match-list').value;
+      renderAll();
+    }
+
+    function resetMatchScore() {
+      if (!confirm('Match score 0/0 par reset karein?')) return;
+      const m = getMatch();
+      m.innings = 1; m.target = null; m.balls = []; m.completed = false; m.winner = null;
+      saveAndSync();
+    }
+
+    function verifyPin() {
+      if (document.getElementById('pin-input').value.trim() === getMatch().pin) {
+        pinUnlocked = true; renderAll();
+      } else alert('Ghalat PIN!');
+    }
+
+    function openExtraModal(type) {
+      const title = type === 'WD' ? 'Wide Ball Runs' : type === 'NB' ? 'No Ball + Bat Runs' : 'Bye / Leg-Bye';
+      let html = `<h3>${title}</h3><div class="grid-2">`;
+      if (type === 'B') {
+        [1, 2, 3, 4].forEach(r => {
+          html += `<button class="btn btn-secondary" onclick="recordBall({runs:${r},extraType:'B'});closeModal()">Bye +${r}</button>`;
+          html += `<button class="btn btn-secondary" onclick="recordBall({runs:${r},extraType:'LB'});closeModal()">Leg-Bye +${r}</button>`;
+        });
+      } else {
+        [0, 1, 2, 3, 4, 6].forEach(r => {
+          if (type === 'WD' && r === 6) return;
+          html += `<button class="btn btn-gold" onclick="recordBall({runs:${r},extraType:'${type}'});closeModal()">${type} + ${r}</button>`;
+        });
+      }
+      html += `</div><button class="btn btn-secondary btn-block" style="margin-top:12px;" onclick="closeModal()">Cancel</button>`;
+      showModal(html);
+    }
+
+    function openWicketModal() {
+      showModal(`
+        <h3>☝️ Wicket Details</h3>
+        <label>Out Type</label>
+        <select id="wk-type" style="margin-bottom:10px;"><option>Caught</option><option>Bowled</option><option>Run Out</option><option>LBW</option></select>
+        <label>Naya Batsman</label>
+        <input id="wk-new-bat" placeholder="e.g. Salman" style="margin-bottom:14px;" />
+        <button class="btn btn-danger btn-block" onclick="confirmWicket()">Confirm Wicket</button>
+        <button class="btn btn-secondary btn-block" style="margin-top:8px;" onclick="closeModal()">Cancel</button>
+      `);
+    }
+
+    function confirmWicket() {
+      recordBall({ runs: 0, extraType: 'NONE', isWicket: true, wicketType: document.getElementById('wk-type').value, newBatsman: document.getElementById('wk-new-bat').value });
+      closeModal();
+    }
+
+    function openPlayerModal(mode, customTitle) {
+      const m = getMatch();
+      let html = `<h3>${customTitle || 'Update Players'}</h3>`;
+      if (mode === 'batsmen' || mode === 'all') {
+        html += `<label>Striker</label><input id="pl-s1" value="${m.striker}" style="margin-bottom:10px;" />`;
+        html += `<label>Non-Striker</label><input id="pl-s2" value="${m.nonStriker}" style="margin-bottom:10px;" />`;
+      }
+      if (mode === 'bowler' || mode === 'all') {
+        html += `<label>Bowler</label><input id="pl-bw" value="${m.bowler}" style="margin-bottom:14px;" />`;
+      }
+      html += `<button class="btn btn-primary btn-block" onclick="savePlayers('${mode}')">Update</button>`;
+      showModal(html);
+    }
+
+    function savePlayers(mode) {
+      const m = getMatch();
+      if (mode === 'batsmen' || mode === 'all') {
+        m.striker = document.getElementById('pl-s1').value.trim() || m.striker;
+        m.nonStriker = document.getElementById('pl-s2').value.trim() || m.nonStriker;
+      }
+      if (mode === 'bowler' || mode === 'all') {
+        m.bowler = document.getElementById('pl-bw').value.trim() || m.bowler;
+      }
+      saveAndSync(); closeModal();
+    }
+
+    function showModal(html) { document.getElementById('modal-content').innerHTML = html; document.getElementById('modal-backdrop').classList.remove('hidden'); }
+    function closeModal() { document.getElementById('modal-backdrop').classList.add('hidden'); }
+
+    function navigate(view) {
+      currentView = view;
+      const url = new URL(window.location);
+      url.searchParams.set('view', view);
+      url.searchParams.set('tourney', currentTourneyId);
+      url.searchParams.set('match', currentMatchId);
+      window.history.pushState({}, '', url);
+      renderAll();
+    }
+
+    function openView(view) {
+      const base = window.location.href.split('?')[0];
+      window.open(`${base}?view=${view}&tourney=${currentTourneyId}&match=${currentMatchId}`, '_blank');
+    }
+
+    function copyField(id) {
+      const el = document.getElementById(id); el.select(); navigator.clipboard.writeText(el.value); alert('Link Copy ho gaya!');
+    }
+
+    function shareWhatsApp() {
+      const m = getMatch(), st = computeMatchStats(m);
+      const text = `🏏 *${tourneyDoc.name} — FJ LIVE*\n${st.battingTeam}: *${st.runs}/${st.wickets}* (${st.oversStr} ov)\nLive Score: ${window.location.href}`;
+      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+    }
+
+    initSync();
+  </script>
+</body>
+</html>
